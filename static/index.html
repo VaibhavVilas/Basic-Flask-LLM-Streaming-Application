@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LLM Stream API</title>
-    <!-- Compiled and minified CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <style>
+        #data-container {
+            white-space: pre-wrap; /* Preserve whitespace and line breaks */
+            word-wrap: break-word; /* Break long words */
+        }
+    </style>
 </head>
-
 <body class="blue-grey lighten-5">
     <div class="container">
         <h1 class="center-align">LLM Stream API</h1>
@@ -18,37 +21,67 @@
                 <input type="text" id="message-input" class="validate" placeholder="Type your message here">
             </div>
             <div class="col s3">
-                <button class="btn waves-effect waves-light" onclick="sendMessage()">Send Message</button>
+                <button class="btn waves-effect waves-light" id="send-btn" onclick="sendMessage()">Send Message</button>
+                <button class="btn red waves-effect waves-light" id="stop-btn" onclick="stopStream()" style="display: none;">Stop</button>
             </div>
         </div>
-        <div id="data-container" class="section">
-            <!-- Data will be appended here -->
-        </div>
+        <div id="data-container" class="section"></div>
     </div>
 
     <script>
         let evtSource;
+        let sessionId;
 
         function sendMessage() {
             const message = document.getElementById("message-input").value;
+            if (!message) return;
+
+            // Clear previous response
+            document.getElementById("data-container").innerHTML = "";
+
+            // Generate a unique session ID
+            sessionId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+
+            // Close any existing stream
             if (evtSource) {
                 evtSource.close();
             }
-            evtSource = new EventSource(`http://localhost:5000/chat_stream/${encodeURIComponent(message)}`);
+
+            // Show stop button, hide send button
+            document.getElementById("stop-btn").style.display = "inline-block";
+            document.getElementById("send-btn").style.display = "none";
+
+            // Start new stream with session ID
+            evtSource = new EventSource(`http://localhost:5000/chat_stream/${encodeURIComponent(message)}?session_id=${sessionId}`);
 
             evtSource.onmessage = function (event) {
                 const dataContainer = document.getElementById("data-container");
-                dataContainer.innerHTML += event.data;  // Appending token by token
+                dataContainer.innerHTML += event.data;
             };
 
             evtSource.onerror = function (err) {
                 console.error("EventSource failed. ReadyState:", evtSource.readyState, "Error:", err);
                 evtSource.close();
+                resetButtons();
             };
         }
+
+        function stopStream() {
+            if (evtSource) {
+                evtSource.close();
+                // Send stop request to server
+                fetch(`http://localhost:5000/stop_stream/${sessionId}`, { method: "POST" })
+                    .then(() => console.log("Stream stopped"))
+                    .catch(err => console.error("Error stopping stream:", err));
+                resetButtons();
+            }
+        }
+
+        function resetButtons() {
+            document.getElementById("stop-btn").style.display = "none";
+            document.getElementById("send-btn").style.display = "inline-block";
+        }
     </script>
-    <!-- Compiled and minified JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 </body>
-
 </html>

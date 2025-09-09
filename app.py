@@ -1,4 +1,4 @@
-from flask import Flask, Response, send_file
+from flask import Flask, Response, send_file, request
 from flask_cors import CORS
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.documents import Document
@@ -69,21 +69,67 @@ retrieval_chain = (
     | StrOutputParser()
 )
 
-# Streaming response generator
-def generate_chat_responses(message):
-    for chunk in retrieval_chain.stream(message):  # Use synchronous stream
-        content = chunk.replace("\n", "<br>")
-        yield f"data: {content}\n\n"
+# # Streaming response generator
+# def generate_chat_responses(message):
+#     for chunk in retrieval_chain.stream(message):  # Use synchronous stream
+#         content = chunk.replace("\n", "<br>")
+#         yield f"data: {content}\n\n"
 
-# Root endpoint to serve HTML
-@app.route("/")
-def root():
-    return send_file("static/index.html")
+# # Root endpoint to serve HTML
+# @app.route("/")
+# def root():
+#     return send_file("static/index.html")
+
+# # Chat streaming endpoint
+# @app.route("/chat_stream/<path:message>")
+# def chat_stream(message):
+#     return Response(generate_chat_responses(message), mimetype="text/event-stream")
+
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=5000, threaded=True)
+
+# Dictionary to track active streaming sessions
+active_streams = {}
+
+# Streaming response generator
+def generate_chat_responses(message, session_id):
+    try:
+        for chunk in retrieval_chain.stream(message):
+            # Check if session has been cancelled
+            if session_id in active_streams and active_streams[session_id]["cancelled"]:
+                break
+            content = chunk.replace("\n", "<br>")
+            yield f"data: {content}\n\n"
+    finally:
+        # Clean up session
+        if session_id in active_streams:
+            del active_streams[session_id]
 
 # Chat streaming endpoint
 @app.route("/chat_stream/<path:message>")
 def chat_stream(message):
-    return Response(generate_chat_responses(message), mimetype="text/event-stream")
+    session_id = request.args.get("session_id")
+    if not session_id:
+        return {"error": "Session ID required"}, 400
+
+    # Mark session as active
+    active_streams[session_id] = {"cancelled": False}
+
+    return Response(generate_chat_responses(message, session_id), mimetype="text/event-stream")
+
+# Stop stream endpoint
+@app.route("/stop_stream/<session_id>", methods=["POST"])
+def stop_stream(session_id):
+    if session_id in active_streams:
+        print("active_streams",active_streams)
+        active_streams[session_id]["cancelled"] = True
+        return {"status": "Stream stopped"}, 200
+    return {"error": "Session not found"}, 404
+
+# Root endpoint (unchanged)
+@app.route("/")
+def root():
+    return send_file("static/index.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, threaded=True)
