@@ -1,6 +1,6 @@
 # Basic-Flask-LLM-Streaming-Application
 
-A Simple Flask applicaiton to showcase LLM streaming by using langchain and also utlizing simple RAG via Chroma Vector store. 
+A Simple Flask applicaiton to showcase LLM streaming by using langchain and also utlizing simple Retrieval-Augmented Generation(RAG) via Chroma Vector store. This Web Application also provides a "STOP" button, to stop generating response before completing, hence showcasing the advantage of streaming allowing us to save tokens as well.
 
 # Prerequisite - 
 OPENAI API KEY
